@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, Button, FlatList, TouchableOpacity, Alert, StyleSheet } from 'react-native';
+import { View, Text, TextInput, FlatList, TouchableOpacity, Alert, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 
 const TimetableScreen = () => {
-  const [timetable, setTimetable] = useState<{ id: string; subject: string; time: string }[]>([]);
+  const [timetable, setTimetable] = useState<{ id: string; subject: string; time: string; endTime: string }[]>([]);
   const [subject, setSubject] = useState('');
   const [time, setTime] = useState('');
+  const [duration, setDuration] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadTimetable();
   }, []);
 
-  const saveTimetable = async (updatedTimetable: { id: string; subject: string; time: string }[]) => {
+  const saveTimetable = async (updatedTimetable: { id: string; subject: string; time: string; endTime: string }[]) => {
     try {
       await AsyncStorage.setItem('timetable', JSON.stringify(updatedTimetable));
     } catch (error) {
@@ -29,64 +31,99 @@ const TimetableScreen = () => {
     }
   };
 
-  const addTimetableEntry = () => {
-    if (subject && time) {
-      const updatedTimetable = [...timetable, { id: Date.now().toString(), subject, time }];
-      setTimetable(updatedTimetable);
-      saveTimetable(updatedTimetable);
-      setSubject('');
-      setTime('');
-    } else {
-      Alert.alert('Error', 'Please enter both subject and time.');
-    }
+  const validateTimeFormat = (timeStr: string) => {
+    const regex = /^([01]?\d|2[0-3]):[0-5]\d$/; 
+    return regex.test(timeStr);
   };
 
-  const deleteTimetableEntry = (id: string) => {
-    const updatedTimetable = timetable.filter(item => item.id !== id);
-    setTimetable(updatedTimetable);
-    saveTimetable(updatedTimetable);
+  const calculateEndTime = (startTime: string, duration: string) => {
+    const [hours, minutes] = startTime.split(':').map(Number);
+    const endMinutes = minutes + Number(duration);
+    const endHours = hours + Math.floor(endMinutes / 60);
+    return `${String(endHours % 24).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+  };
+
+  const addOrUpdateEntry = () => {
+    if (!subject || !time || !duration) {
+      Alert.alert('Error', 'Please enter subject, start time, and duration.');
+      return;
+    }
+    if (!validateTimeFormat(time)) {
+      Alert.alert('Error', 'Invalid time format. Use HH:MM (24-hour format).');
+      return;
+    }
+    const endTime = calculateEndTime(time, duration);
+    
+    if (editingId) {
+      const updatedTimetable = timetable.map(item => 
+        item.id === editingId ? { id: editingId, subject, time, endTime } : item
+      );
+      setTimetable(updatedTimetable);
+      saveTimetable(updatedTimetable);
+      setEditingId(null);
+    } else {
+      const newEntry = { id: Date.now().toString(), subject, time, endTime };
+      const updatedTimetable = [...timetable, newEntry];
+      setTimetable(updatedTimetable);
+      saveTimetable(updatedTimetable);
+    }
+
+    setSubject('');
+    setTime('');
+    setDuration('');
+  };
+
+  const deleteEntry = (id: string) => {
+    Alert.alert('Confirm Delete', 'Are you sure you want to delete this entry?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        onPress: () => {
+          const updatedTimetable = timetable.filter(item => item.id !== id);
+          setTimetable(updatedTimetable);
+          saveTimetable(updatedTimetable);
+        },
+        style: 'destructive',
+      },
+    ]);
+  };
+
+  const startEditing = (item: { id: string; subject: string; time: string; endTime: string }) => {
+    setSubject(item.subject);
+    setTime(item.time);
+    setDuration(''); 
+    setEditingId(item.id);
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Manage Timetable</Text>
-      
-      <TextInput
-        style={styles.input}
-        placeholder="Subject"
-        placeholderTextColor="#ccc"
-        value={subject}
-        onChangeText={setSubject}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Time"
-        placeholderTextColor="#ccc"
-        value={time}
-        onChangeText={setTime}
-      />
-      
-      <View style={styles.buttonContainer}>
-        <Button title="Add Entry" onPress={addTimetableEntry} color="#4CAF50" />
-      </View>
-      
+      <Text style={styles.title}>📅 Manage Timetable</Text>
+
+      <TextInput style={styles.input} placeholder="Subject" value={subject} onChangeText={setSubject} />
+      <TextInput style={styles.input} placeholder="Start Time (HH:MM)" value={time} onChangeText={setTime} />
+      <TextInput style={styles.input} placeholder="Duration (mins)" keyboardType="numeric" value={duration} onChangeText={setDuration} />
+
+      <TouchableOpacity style={styles.addButton} onPress={addOrUpdateEntry}>
+        <Text style={styles.addButtonText}>{editingId ? 'Update Entry' : 'Add Entry'}</Text>
+      </TouchableOpacity>
+
       <FlatList
         data={timetable}
-        keyExtractor={item => item.id}
+        keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <View style={styles.entry}>
-            <Text style={styles.entryText}>{item.subject}</Text>
-            <Text style={styles.entryText}>{item.time}</Text>
-            <TouchableOpacity onPress={() => deleteTimetableEntry(item.id)}>
-              <MaterialIcons name="delete" size={24} color="#FF0000" />
-            </TouchableOpacity>
-          </View>
-        )}
-        ListHeaderComponent={() => (
-          <View style={styles.header}>
-            <Text style={styles.headerText}>Subject</Text>
-            <Text style={styles.headerText}>Time</Text>
-            <Text style={styles.headerText}>Options</Text>
+            <View>
+              <Text style={styles.entryText}>{item.subject}</Text>
+              <Text style={styles.entryTime}>{item.time} - {item.endTime}</Text>
+            </View>
+            <View style={styles.iconContainer}>
+              <TouchableOpacity onPress={() => startEditing(item)}>
+                <MaterialIcons name="edit" size={24} color="#2196F3" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => deleteEntry(item.id)}>
+                <MaterialIcons name="delete" size={24} color="#FF0000" />
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       />
@@ -98,72 +135,61 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: '#F5F5F5', 
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
   },
   title: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: 'bold',
-    marginBottom: 30,
     textAlign: 'center',
-    color: '#333', 
+    marginBottom: 20,
+    color: '#333',
   },
   input: {
-    width: '80%', 
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: '#CCC',
     padding: 10,
-    marginBottom: 15,
-    color: '#333', 
-    borderRadius: 10,
-    backgroundColor: '#fff', 
-  },
-  buttonContainer: {
-    marginTop: 20,
-    borderRadius: 10,
-    overflow: 'hidden',
-    width: '80%',
-    marginBottom: 20, 
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 10,
-    backgroundColor: '#4CAF50',
-    borderRadius: 10,
     marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#000', 
+    backgroundColor: '#fff',
+    borderRadius: 8,
   },
-  headerText: {
-    fontSize: 18,
+  addButton: {
+    backgroundColor: '#4CAF50',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  addButtonText: {
     color: '#fff',
+    fontSize: 16,
     fontWeight: 'bold',
-    width: '30%',
-    textAlign: 'center',
   },
   entry: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 15,
-    marginVertical: 5,
-    backgroundColor: '#FFFFFF', 
-    borderRadius: 10,
+    padding: 12,
+    backgroundColor: '#FFF',
+    borderRadius: 8,
+    marginBottom: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: '#000', 
+    shadowRadius: 3,
+    elevation: 2,
   },
   entryText: {
-    fontSize: 18,
-    color: '#333', 
-    width: '30%',
-    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  entryTime: {
+    fontSize: 14,
+    color: '#666',
+  },
+  iconContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
 });
 
