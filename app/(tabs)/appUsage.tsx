@@ -3,138 +3,182 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, AppState, AppStateStatus, StyleSheet, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import { PieChart } from 'react-native-chart-kit';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
-    shouldSetBadge: true,
+    shouldSetBadge: false,
   }),
 });
 
-async function setupNotifications() {
-  if (Device.isDevice) {
-    const { status } = await Notifications.requestPermissionsAsync();
-    if (status !== 'granted') {
-      alert('Enable notifications for better tracking.');
-      return;
-    }
+async function registerForPushNotificationsAsync() {
+  if (!Device.isDevice) {
+    console.log('Must use a physical device for push notifications');
+    return;
+  }
 
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('class-reminders', {
-        name: 'Class Reminders',
-        importance: Notifications.AndroidImportance.HIGH,
-        vibrationPattern: [0, 500, 250, 500],
-        lightColor: '#FF231F7C',
-      });
-    }
+  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  let finalStatus = existingStatus;
+
+  if (existingStatus !== 'granted') {
+    const { status } = await Notifications.requestPermissionsAsync();
+    finalStatus = status;
+  }
+
+  if (finalStatus !== 'granted') {
+    console.log('Failed to get push token for notifications!');
+    return;
+  }
+
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('class-reminders', {
+      name: 'Class Reminders',
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 500, 250, 500],
+      lightColor: '#FF231F7C',
+    });
   }
 }
 
 const AppUsageScreen = () => {
-  const [appState, setAppState] = useState(AppState.currentState);
-  const [usageTime, setUsageTime] = useState(0);
-  const [lastActiveTime, setLastActiveTime] = useState<number | null>(null);
+  const [focusedTime, setFocusedTime] = useState(0);
+  const [distractedTime, setDistractedTime] = useState(0);
+  const [classSession, setClassSession] = useState<ClassSession | null>(null);
+
+  interface ClassSession {
+    time: string;
+    endTime: string;
+  }
 
   useEffect(() => {
-    setupNotifications();
+    registerForPushNotificationsAsync();
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription.remove();
   }, []);
 
-  const handleAppStateChange = async (nextAppState: string) => {
-    if (appState.match(/inactive|background/) && nextAppState === 'active') {
-      if (lastActiveTime) {
-        const timeSpent = (Date.now() - lastActiveTime) / 1000;
-        setUsageTime(prevTime => prevTime + timeSpent);
-      }
-    }
-
-    if (nextAppState.match(/inactive|background/)) {
-      setLastActiveTime(Date.now());
-
+  const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+    if (nextAppState === 'background') {
       const timetableData = await AsyncStorage.getItem('timetable');
       if (timetableData) {
         const timetable = JSON.parse(timetableData);
         const currentTime = new Date();
         const formattedTime = currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-        const isClassTime = timetable.some(
-          (entry: { time: string }) => entry.time.trim() === formattedTime.trim()
+  
+        const activeClass = timetable.find(
+          (entry: { time: string; endTime: string }) => entry.time.trim() === formattedTime.trim()
         );
-
-        if (isClassTime) {
-          console.log("✅ Class time detected! Sending notification...");
-          await sendFocusNotification();
-        } else {
-          console.log("❌ Not class time. No notification sent.");
+  
+        if (activeClass) {
+          console.log('✅ Class session detected:', activeClass);
+  
+          const sessionEndTime = new Date();
+          sessionEndTime.setHours(parseInt(activeClass.endTime.split(':')[0]));
+          sessionEndTime.setMinutes(parseInt(activeClass.endTime.split(':')[1]));
+  
+          if (currentTime > sessionEndTime) {
+            console.log('⏳ Class session ended. Stopping tracking.');
+            return;
+          }
+  
+          setClassSession(activeClass);
+          setDistractedTime((prev) => prev + 1); 
+          await sendNotification(); 
         }
       }
     }
-
-    setAppState(nextAppState as AppStateStatus);
   };
-
-  const sendFocusNotification = async () => {
+  
+  const sendNotification = async () => {
+    console.log('🔔 Sending focus reminder notification');
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: "📚 Stay Focused!",
-        body: "You're in class. Avoid distractions and focus on your studies!",
-        sound: "default", 
+        title: '📚 Stay Focused!',
+        body: 'You were distracted during class. Try to stay on track!',
+        sound: 'default',
       },
-      trigger: null, 
+      trigger: null,
     });
   };
 
+  const totalTime = focusedTime + distractedTime;
+  const data =
+    totalTime > 0
+      ? [
+          { name: 'Focused', time: focusedTime, color: '#4CAF50' },
+          { name: 'Distracted', time: distractedTime, color: '#FF0000' },
+        ]
+      : [{ name: 'No Data', time: 1, color: '#D3D3D3' }];
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>App Usage</Text>
-      <View style={styles.usageContainer}>
-        <Text style={styles.usageText}>Total Usage Time:</Text>
-        <Text style={styles.usageTime}>{usageTime.toFixed(2)} seconds</Text>
-      </View>
+      <Text style={styles.title}>📊 Focus vs. Distraction</Text>
+      <PieChart
+        data={data}
+        width={300}
+        height={220}
+        chartConfig={{
+          backgroundColor: '#fff',
+          decimalPlaces: 1,
+          color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+        }}
+        accessor="time"
+        backgroundColor="transparent"
+        paddingLeft="15"
+      />
+      {totalTime > 0 ? (
+        <View style={styles.summaryContainer}>
+          <Text style={styles.summaryText}>🟢 Focused Time: {focusedTime.toFixed(1)} mins</Text>
+          <Text style={styles.summaryText}>🔴 Distracted Time: {distractedTime.toFixed(1)} mins</Text>
+          <Text style={styles.totalTime}>⏳ Total Time Tracked: {totalTime.toFixed(1)} mins</Text>
+        </View>
+      ) : (
+        <Text style={styles.noDataText}>No activity recorded yet. Stay focused! 🎯</Text>
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    padding: 20,
-    backgroundColor: '#F5F5F5',
-    justifyContent: 'center',
     alignItems: 'center',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 30,
-    textAlign: 'center',
-    color: '#333',
-  },
-  usageContainer: {
-    width: '80%',
-    padding: 15,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#fff',
+    padding: 20,
     borderRadius: 10,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.1,
     shadowRadius: 5,
     elevation: 3,
-    borderWidth: 1,
-    borderColor: '#000',
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  summaryContainer: {
+    marginTop: 15,
     alignItems: 'center',
   },
-  usageText: {
-    fontSize: 18,
-    color: '#333',
-    marginBottom: 10,
+  summaryText: {
+    fontSize: 16,
+    color: '#444',
+    marginBottom: 5,
   },
-  usageTime: {
-    fontSize: 24,
+  totalTime: {
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#4CAF50',
+    color: '#222',
+    marginTop: 5,
+  },
+  noDataText: {
+    fontSize: 16,
+    fontStyle: 'italic',
+    color: '#888',
+    marginTop: 10,
   },
 });
 
