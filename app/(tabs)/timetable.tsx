@@ -5,6 +5,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import * as Papa from 'papaparse';
+import * as Sharing from 'expo-sharing';
 
 interface TimetableEntry {
   id: string;
@@ -102,12 +103,20 @@ const TimetableScreen = () => {
     }
   };
 
-  const downloadSampleCSV = () => {
+  const downloadSampleCSV = async () => {
     const sampleData = 'subject,time,duration\nMath,08:00,60\nScience,09:30,45';
     const uri = FileSystem.documentDirectory + 'sample_timetable.csv';
-    FileSystem.writeAsStringAsync(uri, sampleData).then(() => {
-      Alert.alert('Download Complete', 'Sample CSV file is available in your documents folder.');
-    }).catch(error => console.error('Error writing file:', error));
+    
+    try {
+      await FileSystem.writeAsStringAsync(uri, sampleData);
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri);
+      } else {
+        Alert.alert('Error', 'Sharing is not available on this device');
+      }
+    } catch (error) {
+      console.error('Error writing file:', error);
+    }
   };
 
   return (
