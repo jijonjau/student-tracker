@@ -6,6 +6,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import * as Papa from 'papaparse';
 import * as Sharing from 'expo-sharing';
+import * as Permissions from 'expo-permissions';
 
 interface TimetableEntry {
   id: string;
@@ -89,19 +90,122 @@ const TimetableScreen = () => {
     })).sort((a, b) => a.time.localeCompare(b.time));
   };
 
-  const handleFileUpload = async () => {
-    const result = await DocumentPicker.getDocumentAsync({ type: 'text/csv' });
-    if (result.canceled || !result.assets || result.assets.length === 0) return;
+  // const handleFileUpload = async () => {
+  //   try {
+  //     const result = await DocumentPicker.getDocumentAsync({
+  //       type: 'text/csv',
+  //       copyToCacheDirectory: false, // Ensures the file isn't moved
+  //     });
+  
+  //     console.log('Document Picker Result:', result);
+  
+  //     if (result.canceled) {
+  //       console.log('User canceled file selection.');
+  //       return;
+  //     }
+  
+  //     if (!result.assets || result.assets.length === 0) {
+  //       Alert.alert('Error', 'No file selected');
+  //       return;
+  //     }
+  
+  //     const fileUri = result.assets[0].uri;
+  //     console.log('Selected file URI:', fileUri);
+  
+  //     const fileContent = await FileSystem.readAsStringAsync(fileUri);
+  //     console.log('File Content:', fileContent);
+  
+  //     const extractedData = parseCSVData(fileContent);
+  
+  //     if (extractedData.length > 0) {
+  //       setTimetable(extractedData);
+  //       saveTimetable(extractedData);
+  //       Alert.alert('Success', 'Timetable uploaded successfully!');
+  //     } else {
+  //       Alert.alert('Error', 'Invalid CSV data');
+  //     }
+  //   } catch (error) {
+  //     console.error('Error uploading file:', error);
+  //     Alert.alert('Error', 'An error occurred while uploading the file');
+  //   }
+  // };
+  
+  // const handleFileUpload = async () => {
+  //   try {
+  //     const result = await DocumentPicker.getDocumentAsync({
+  //       type: 'text/csv',
+  //       copyToCacheDirectory: false, // Ensures the file isn't moved
+  //     });
+  
+  //     console.log('Document Picker Result:', result);
+  
+  //     if (result.canceled) {
+  //       console.log('User canceled file selection.');
+  //       return;
+  //     }
+  
+  //     const fileUri = result.assets[0].uri;
+  //       console.log('Selected file URI:', fileUri);
+  
+  //     const fileContent = await FileSystem.readAsStringAsync(fileUri);
+  //     console.log('File Content:', fileContent);
+  
+  //     const extractedData = parseCSVData(fileContent);
+  
+  //     if (extractedData.length > 0) {
+  //       setTimetable(extractedData);
+  //       saveTimetable(extractedData);
+  //       Alert.alert('Success', 'Timetable uploaded successfully!');
+  //     } else {
+  //       Alert.alert('Error', 'Invalid CSV data');
+  //     }
+  //   } catch (error) {
+  //     console.error('Error uploading file:', error);
+  //     Alert.alert('Error', 'An error occurred while uploading the file');
+  //   }
+  // };
 
-    const file = result.assets[0];
-    const fileContent = await FileSystem.readAsStringAsync(file.uri);
+  
+const handleFileUpload = async () => {
+  try {
+    const { status } = await Permissions.askAsync(Permissions.MEDIA_LIBRARY);
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'Permission to access media library is required!');
+      return;
+    }
+
+    const result = await DocumentPicker.getDocumentAsync({
+      type: 'text/csv',
+      copyToCacheDirectory: false, // Ensures the file isn't moved
+    });
+
+    console.log('Document Picker Result:', result);
+
+    if (result.canceled) {
+      console.log('User canceled file selection.');
+      return;
+    }
+
+    const fileUri = result.assets[0].uri;
+    console.log('Selected file URI:', fileUri);
+
+    const fileContent = await FileSystem.readAsStringAsync(fileUri);
+    console.log('File Content:', fileContent);
+
     const extractedData = parseCSVData(fileContent);
 
     if (extractedData.length > 0) {
       setTimetable(extractedData);
       saveTimetable(extractedData);
+      Alert.alert('Success', 'Timetable uploaded successfully!');
+    } else {
+      Alert.alert('Error', 'Invalid CSV data');
     }
-  };
+  } catch (error) {
+    console.error('Error uploading file:', error);
+    Alert.alert('Error', 'An error occurred while uploading the file');
+  }
+};
 
   const downloadSampleCSV = async () => {
     const sampleData = 'subject,time,duration\nMath,08:00,60\nScience,09:30,45';
