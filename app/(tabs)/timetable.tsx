@@ -4,17 +4,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 
 const TimetableScreen = () => {
-  const [timetable, setTimetable] = useState<{ id: string; subject: string; time: string; endTime: string }[]>([]);
+  const [timetable, setTimetable] = useState([]);
   const [subject, setSubject] = useState('');
   const [time, setTime] = useState('');
   const [duration, setDuration] = useState('');
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState(null);
 
   useEffect(() => {
     loadTimetable();
   }, []);
 
-  const saveTimetable = async (updatedTimetable: { id: string; subject: string; time: string; endTime: string }[]) => {
+  const saveTimetable = async (updatedTimetable) => {
     try {
       await AsyncStorage.setItem('timetable', JSON.stringify(updatedTimetable));
     } catch (error) {
@@ -31,12 +31,12 @@ const TimetableScreen = () => {
     }
   };
 
-  const validateTimeFormat = (timeStr: string) => {
-    const regex = /^([01]?\d|2[0-3]):[0-5]\d$/; 
+  const validateTimeFormat = (timeStr) => {
+    const regex = /^([01]?\d|2[0-3]):[0-5]\d$/; // 24-hour format: HH:MM (00:00 - 23:59)
     return regex.test(timeStr);
   };
 
-  const calculateEndTime = (startTime: string, duration: string) => {
+  const calculateEndTime = (startTime, duration) => {
     const [hours, minutes] = startTime.split(':').map(Number);
     const endMinutes = minutes + Number(duration);
     const endHours = hours + Math.floor(endMinutes / 60);
@@ -48,14 +48,25 @@ const TimetableScreen = () => {
       Alert.alert('Error', 'Please enter subject, start time, and duration.');
       return;
     }
+
     if (!validateTimeFormat(time)) {
-      Alert.alert('Error', 'Invalid time format. Use HH:MM (24-hour format).');
+      Alert.alert('Error', 'Invalid time format. Use HH:MM in 24-hour format (e.g., 14:30).');
       return;
     }
+
+    // Check for unique subject
+    const isSubjectTaken = timetable.some(
+      (item) => item.subject.toLowerCase() === subject.toLowerCase() && item.id !== editingId
+    );
+    if (isSubjectTaken) {
+      Alert.alert('Error', 'Subject name must be unique.');
+      return;
+    }
+
     const endTime = calculateEndTime(time, duration);
-    
+
     if (editingId) {
-      const updatedTimetable = timetable.map(item => 
+      const updatedTimetable = timetable.map((item) =>
         item.id === editingId ? { id: editingId, subject, time, endTime } : item
       );
       setTimetable(updatedTimetable);
@@ -73,13 +84,13 @@ const TimetableScreen = () => {
     setDuration('');
   };
 
-  const deleteEntry = (id: string) => {
+  const deleteEntry = (id) => {
     Alert.alert('Confirm Delete', 'Are you sure you want to delete this entry?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         onPress: () => {
-          const updatedTimetable = timetable.filter(item => item.id !== id);
+          const updatedTimetable = timetable.filter((item) => item.id !== id);
           setTimetable(updatedTimetable);
           saveTimetable(updatedTimetable);
         },
@@ -88,20 +99,37 @@ const TimetableScreen = () => {
     ]);
   };
 
-  const startEditing = (item: { id: string; subject: string; time: string; endTime: string }) => {
+  const startEditing = (item) => {
     setSubject(item.subject);
     setTime(item.time);
-    setDuration(''); 
+    setDuration(''); // Reset duration for editing
     setEditingId(item.id);
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>📅 Manage Timetable</Text>
+      <Text style={styles.subtitle}>Enter times in 24-hour format (e.g., 14:30 for 2:30 PM)</Text>
 
-      <TextInput style={styles.input} placeholder="Subject" value={subject} onChangeText={setSubject} />
-      <TextInput style={styles.input} placeholder="Start Time (HH:MM)" value={time} onChangeText={setTime} />
-      <TextInput style={styles.input} placeholder="Duration (mins)" keyboardType="numeric" value={duration} onChangeText={setDuration} />
+      <TextInput
+        style={styles.input}
+        placeholder="Subject (must be unique)"
+        value={subject}
+        onChangeText={setSubject}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Start Time (HH:MM, 24-hour)"
+        value={time}
+        onChangeText={setTime}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Duration (minutes)"
+        keyboardType="numeric"
+        value={duration}
+        onChangeText={setDuration}
+      />
 
       <TouchableOpacity style={styles.addButton} onPress={addOrUpdateEntry}>
         <Text style={styles.addButtonText}>{editingId ? 'Update Entry' : 'Add Entry'}</Text>
@@ -141,8 +169,14 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 10,
     color: '#333',
+  },
+  subtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 10,
+    color: '#666',
   },
   input: {
     borderWidth: 1,
