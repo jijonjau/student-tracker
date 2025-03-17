@@ -1,110 +1,158 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, FlatList, TouchableOpacity, Alert, StyleSheet } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { MaterialIcons } from '@expo/vector-icons';
+import React, { useState, useEffect } from 'react'
+import {
+  View,
+  Text,
+  TextInput,
+  FlatList,
+  TouchableOpacity,
+  Alert,
+  StyleSheet,
+} from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { MaterialIcons } from '@expo/vector-icons'
 
 const TimetableScreen = () => {
-  const [timetable, setTimetable] = useState<{ id: string; subject: string; time: string; endTime: string }[]>([]);
-  const [subject, setSubject] = useState('');
-  const [time, setTime] = useState('');
-  const [duration, setDuration] = useState('');
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [timetable, setTimetable] = useState<
+    { id: string; subject: string; time: string; endTime: string }[]
+  >([])
+  const [subject, setSubject] = useState('')
+  const [time, setTime] = useState('')
+  const [duration, setDuration] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   useEffect(() => {
-    loadTimetable();
-  }, []);
+    loadTimetable()
+  }, [])
 
-  const saveTimetable = async (updatedTimetable: { id: string; subject: string; time: string; endTime: string }[]) => {
+  const saveTimetable = async (
+    updatedTimetable: {
+      id: string
+      subject: string
+      time: string
+      endTime: string
+    }[],
+  ) => {
     try {
-      await AsyncStorage.setItem('timetable', JSON.stringify(updatedTimetable));
+      await AsyncStorage.setItem('timetable', JSON.stringify(updatedTimetable))
     } catch (error) {
-      console.error('Error saving timetable:', error);
+      console.error('Error saving timetable:', error)
     }
-  };
+  }
 
   const loadTimetable = async () => {
     try {
-      const data = await AsyncStorage.getItem('timetable');
-      if (data) setTimetable(JSON.parse(data));
+      const data = await AsyncStorage.getItem('timetable')
+      if (data) setTimetable(JSON.parse(data))
     } catch (error) {
-      console.error('Error loading timetable:', error);
+      console.error('Error loading timetable:', error)
     }
-  };
+  }
 
   const validateTimeFormat = (timeStr: string) => {
-    const regex = /^([01]?\d|2[0-3]):[0-5]\d$/; 
-    return regex.test(timeStr);
-  };
+    const regex = /^([01]?\d|2[0-3]):[0-5]\d$/
+    return regex.test(timeStr)
+  }
 
   const calculateEndTime = (startTime: string, duration: string) => {
-    const [hours, minutes] = startTime.split(':').map(Number);
-    const endMinutes = minutes + Number(duration);
-    const endHours = hours + Math.floor(endMinutes / 60);
-    return `${String(endHours % 24).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
-  };
+    const [hours, minutes] = startTime.split(':').map(Number)
+    const endMinutes = minutes + Number(duration)
+    const endHours = hours + Math.floor(endMinutes / 60)
+    return `${String(endHours % 24).padStart(2, '0')}:${String(
+      endMinutes % 60,
+    ).padStart(2, '0')}`
+  }
 
   const addOrUpdateEntry = () => {
     if (!subject || !time || !duration) {
-      Alert.alert('Error', 'Please enter subject, start time, and duration.');
-      return;
+      Alert.alert('Error', 'Please enter subject, start time, and duration.')
+      return
     }
     if (!validateTimeFormat(time)) {
-      Alert.alert('Error', 'Invalid time format. Use HH:MM (24-hour format).');
-      return;
+      Alert.alert('Error', 'Invalid time format. Use HH:MM (24-hour format).')
+      return
     }
-    const endTime = calculateEndTime(time, duration);
-    
+    const endTime = calculateEndTime(time, duration)
+
     if (editingId) {
-      const updatedTimetable = timetable.map(item => 
-        item.id === editingId ? { id: editingId, subject, time, endTime } : item
-      );
-      setTimetable(updatedTimetable);
-      saveTimetable(updatedTimetable);
-      setEditingId(null);
+      const updatedTimetable = timetable.map((item) =>
+        item.id === editingId
+          ? { id: editingId, subject, time, endTime }
+          : item,
+      )
+      setTimetable(updatedTimetable)
+      saveTimetable(updatedTimetable)
+      setEditingId(null)
     } else {
-      const newEntry = { id: Date.now().toString(), subject, time, endTime };
-      const updatedTimetable = [...timetable, newEntry];
-      setTimetable(updatedTimetable);
-      saveTimetable(updatedTimetable);
+      const newEntry = { id: Date.now().toString(), subject, time, endTime }
+      const updatedTimetable = [...timetable, newEntry]
+      setTimetable(updatedTimetable)
+      saveTimetable(updatedTimetable)
     }
 
-    setSubject('');
-    setTime('');
-    setDuration('');
-  };
+    setSubject('')
+    setTime('')
+    setDuration('')
+  }
 
   const deleteEntry = (id: string) => {
-    Alert.alert('Confirm Delete', 'Are you sure you want to delete this entry?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        onPress: () => {
-          const updatedTimetable = timetable.filter(item => item.id !== id);
-          setTimetable(updatedTimetable);
-          saveTimetable(updatedTimetable);
+    Alert.alert(
+      'Confirm Delete',
+      'Are you sure you want to delete this entry?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          onPress: () => {
+            const updatedTimetable = timetable.filter((item) => item.id !== id)
+            setTimetable(updatedTimetable)
+            saveTimetable(updatedTimetable)
+          },
+          style: 'destructive',
         },
-        style: 'destructive',
-      },
-    ]);
-  };
+      ],
+    )
+  }
 
-  const startEditing = (item: { id: string; subject: string; time: string; endTime: string }) => {
-    setSubject(item.subject);
-    setTime(item.time);
-    setDuration(''); 
-    setEditingId(item.id);
-  };
+  const startEditing = (item: {
+    id: string
+    subject: string
+    time: string
+    endTime: string
+  }) => {
+    setSubject(item.subject)
+    setTime(item.time)
+    setDuration('')
+    setEditingId(item.id)
+  }
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>📅 Manage Timetable</Text>
 
-      <TextInput style={styles.input} placeholder="Subject" value={subject} onChangeText={setSubject} />
-      <TextInput style={styles.input} placeholder="Start Time (HH:MM)" value={time} onChangeText={setTime} />
-      <TextInput style={styles.input} placeholder="Duration (mins)" keyboardType="numeric" value={duration} onChangeText={setDuration} />
+      <TextInput
+        style={styles.input}
+        placeholder="Subject"
+        value={subject}
+        onChangeText={setSubject}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Start Time (HH:MM)"
+        value={time}
+        onChangeText={setTime}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Duration (mins)"
+        keyboardType="numeric"
+        value={duration}
+        onChangeText={setDuration}
+      />
 
       <TouchableOpacity style={styles.addButton} onPress={addOrUpdateEntry}>
-        <Text style={styles.addButtonText}>{editingId ? 'Update Entry' : 'Add Entry'}</Text>
+        <Text style={styles.addButtonText}>
+          {editingId ? 'Update Entry' : 'Add Entry'}
+        </Text>
       </TouchableOpacity>
 
       <FlatList
@@ -114,7 +162,9 @@ const TimetableScreen = () => {
           <View style={styles.entry}>
             <View>
               <Text style={styles.entryText}>{item.subject}</Text>
-              <Text style={styles.entryTime}>{item.time} - {item.endTime}</Text>
+              <Text style={styles.entryTime}>
+                {item.time} - {item.endTime}
+              </Text>
             </View>
             <View style={styles.iconContainer}>
               <TouchableOpacity onPress={() => startEditing(item)}>
@@ -128,8 +178,8 @@ const TimetableScreen = () => {
         )}
       />
     </View>
-  );
-};
+  )
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -191,6 +241,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-});
+})
 
-export default TimetableScreen;
+export default TimetableScreen

@@ -1,5 +1,7 @@
 # student-tracker
+
 Tracks activities of a student during class-time hours to enhance focus of a student
+
 # Welcome to your Expo app 👋
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
