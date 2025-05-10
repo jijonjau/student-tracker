@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React from 'react'
+import { View, Text, StyleSheet } from 'react-native'
 
 const HomeScreen = () => {
   return (
@@ -7,7 +7,8 @@ const HomeScreen = () => {
       <Text style={styles.appName}>🎯 Student Tracker</Text>
 
       <Text style={styles.motivation}>
-        Stay focused, minimize distractions, and make the most of your class time!
+        Stay focused, minimize distractions, and make the most of your class
+        time!
       </Text>
 
       <View style={styles.featureBox}>
@@ -33,8 +34,8 @@ const HomeScreen = () => {
 
       <Text style={styles.footer}>Boost your productivity today! 🚀</Text>
     </View>
-  );
-};
+  )
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -47,7 +48,7 @@ const styles = StyleSheet.create({
   appName: {
     fontSize: 30,
     fontWeight: 'bold',
-    color: '#2E7D32', 
+    color: '#2E7D32',
     marginBottom: 15,
   },
   motivation: {
@@ -73,7 +74,7 @@ const styles = StyleSheet.create({
   featureTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1B5E20', 
+    color: '#1B5E20',
     marginBottom: 5,
   },
   featureDescription: {
@@ -86,6 +87,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#2E7D32',
   },
-});
+})
 
-export default HomeScreen;
+export default HomeScreen
